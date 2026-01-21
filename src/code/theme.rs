@@ -19,7 +19,7 @@ impl Default for EditorTheme {
             types: [209, 154, 102],    // Orange
             strings: [152, 195, 121],  // Green
             comments: [92, 99, 112],   // Gray
-            background: [40, 44, 52],  // Dark Gray
+            background: [40, 44, 104],  // Dark Gray
             text: [171, 178, 191],     // Light Gray
         }
     }

@@ -3,61 +3,68 @@ use super::TopBarState;
 
 pub fn handle_dragging(ui: &mut egui::Ui, ctx: &egui::Context, state: &mut TopBarState) {
     let rect = ui.max_rect();
-    let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-    const BUTTON_SIZE: f32 = 12.0;
-    const LERP_FACTOR: f32 = 0.20;
-    const MIN_SPEED: f32 = 2.0;
+    
+    // Dynamic centering based on the actual bar height
+    let center_y = rect.center().y;
+    let mut current_x = rect.min.x + 15.0;
 
-    // Drag Interaction
-    let bar_response = ui.interact(rect, ui.id().with("bar"), egui::Sense::click_and_drag());
-    if bar_response.dragged() && !is_maximized {
-        let delta = bar_response.drag_delta();
-        if state.target_pos.is_none() {
-            let current_win = ctx.input(|i| i.viewport().outer_rect.map(|r| r.min)).unwrap_or(egui::Pos2::ZERO);
-            state.target_pos = Some(current_win);
-            state.current_pos = Some(current_win);
-        }
-        if let Some(target) = &mut state.target_pos {
-            *target += delta;
-        }
-    }
+    let base_radius = 6.0;
+    let hover_radius = 8.5;
+    let spacing = 22.0;
+    let hitbox_size = egui::vec2(20.0, 26.0);
 
-    // Smooth Lerp Movement
-    if let (Some(current), Some(target)) = (state.current_pos, state.target_pos) {
-        let diff = target - current;
-        if diff.length() > 0.5 {
-            let mut step = diff * LERP_FACTOR;
-            if step.length() < MIN_SPEED && diff.length() > MIN_SPEED {
-                step = diff.normalized() * MIN_SPEED;
+    let colors = [
+        egui::Color32::from_rgb(255, 95, 87),  // Close
+        egui::Color32::from_rgb(255, 189, 46), // Minimize
+        egui::Color32::from_rgb(39, 201, 63),  // Maximize
+    ];
+
+    for (i, color) in colors.iter().enumerate() {
+        let center = egui::pos2(current_x, center_y);
+        let interact_rect = egui::Rect::from_center_size(center, hitbox_size);
+        
+        let response = ui.interact(
+            interact_rect, 
+            ui.id().with(("traffic", i)), 
+            egui::Sense::click()
+        );
+
+        let radius = if response.hovered() { hover_radius } else { base_radius };
+        ui.painter().circle_filled(center, radius, *color);
+
+        if response.clicked() {
+            match i {
+                0 => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                1 => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+                2 => {
+                    state.is_maximized = !state.is_maximized;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(state.is_maximized));
+                }
+                _ => {}
             }
-            let next_pos = current + step;
-            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(next_pos));
-            state.current_pos = Some(next_pos);
-            ctx.request_repaint();
-        } else if !bar_response.dragged() {
-            state.target_pos = None;
-            state.current_pos = None;
         }
+        current_x += spacing;
     }
 
-    // Render Traffic Light Buttons
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        ui.add_space(10.0);
-        let buttons = [
-            (egui::Color32::from_rgb(255, 95, 87), egui::ViewportCommand::Close),
-            (egui::Color32::from_rgb(255, 189, 46), egui::ViewportCommand::Minimized(true)),
-            (egui::Color32::from_rgb(39, 201, 63), egui::ViewportCommand::Maximized(!is_maximized)),
-        ];
+    // Title text aligned to the same center
+    let text_pos = egui::pos2(current_x + 5.0, center_y);
+    ui.painter().text(
+        text_pos,
+        egui::Align2::LEFT_CENTER,
+        "🚀 Iaduim @ NGIN",
+        egui::FontId::proportional(14.0),
+        egui::Color32::WHITE,
+    );
 
-        for (color, cmd) in buttons {
-            let (rect, res) = ui.allocate_at_least(egui::Vec2::splat(BUTTON_SIZE), egui::Sense::click());
-            let visual_radius = if res.hovered() { BUTTON_SIZE / 1.3 } else { BUTTON_SIZE / 1.5 };
-            ui.painter().circle_filled(rect.center(), visual_radius, color);
-            if res.clicked() { ctx.send_viewport_cmd(cmd); }
-            ui.add_space(2.0);
-        }
+    // FIX: Drag area stops 250px before the right edge so it doesn't block menus
+    let drag_max_x = ui.available_width() - 250.0;
+    let drag_rect = egui::Rect::from_min_max(
+        egui::pos2(rect.min.x + 80.0, rect.min.y),
+        egui::pos2(rect.min.x + drag_max_x, rect.max.y),
+    );
 
-        ui.add_space(10.0);
-        ui.label(egui::RichText::new("Ijaduim IDE @ Arch Linux").color(egui::Color32::BLACK));
-    });
+    let drag_response = ui.interact(drag_rect, ui.id().with("drag_title"), egui::Sense::drag());
+    if drag_response.dragged() {
+        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
 }
