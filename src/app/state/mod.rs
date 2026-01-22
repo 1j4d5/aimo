@@ -1,12 +1,12 @@
-use crate::panels::top::TopBarState; // Removed unused imports to fix warnings
-use crate::code::theme::EditorTheme;
-use std::path::PathBuf;
+pub mod buffer;
+pub mod confirm;
 
-pub struct FileBuffer {
-    pub name: String,
-    pub path: Option<String>,
-    pub content: String,
-}
+pub use buffer::FileBuffer;
+pub use confirm::CloseConfirmation;
+
+use std::path::PathBuf;
+use crate::panels::top::TopBarState;
+use crate::code::theme::EditorTheme;
 
 #[derive(PartialEq, Default, Clone, Copy)]
 pub enum BottomTab {
@@ -21,61 +21,62 @@ pub struct EditorApp {
     pub bottom_tab: BottomTab,
     pub top_bar_state: TopBarState,
     pub project_path: Option<PathBuf>,
+    pub close_confirm: CloseConfirmation,
 }
 
 impl EditorApp {
-    // THIS FIXES THE E0599 ERROR
     pub fn reload_theme(&mut self) {
         self.theme = EditorTheme::load();
     }
 
     pub fn new_file(&mut self) {
-        self.buffers.push(FileBuffer {
-            name: format!("untitled_{}.rs", self.buffers.len() + 1),
-            path: None,
-            content: String::new(),
-        });
+        self.buffers.push(FileBuffer::new_untitled(self.buffers.len() + 1));
         self.active_buffer_idx = self.buffers.len() - 1;
-    }
-
-    pub fn open_folder(&mut self, path: PathBuf) {
-        self.project_path = Some(path);
     }
 
     pub fn open_file_from_path(&mut self, path: PathBuf) {
         let path_str = path.to_string_lossy().to_string();
+        // Don't reopen if already open
         if let Some(idx) = self.buffers.iter().position(|b| b.path.as_ref() == Some(&path_str)) {
             self.active_buffer_idx = idx;
             return;
         }
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            self.buffers.push(FileBuffer { name, path: Some(path_str), content });
+        if let Some(new_buffer) = FileBuffer::from_path(path) {
+            self.buffers.push(new_buffer);
             self.active_buffer_idx = self.buffers.len() - 1;
         }
     }
-
+    pub fn open_folder(&mut self, path: PathBuf) {
+        self.project_path = Some(path);
+    }
     pub fn save_current(&mut self) {
+        let mut reload_needed = false;
         if let Some(buffer) = self.buffers.get_mut(self.active_buffer_idx) {
-            if let Some(path) = &buffer.path {
-                let _ = std::fs::write(path, &buffer.content);
-                if buffer.name == "color.json" { self.reload_theme(); }
-            } else if let Some(path) = rfd::FileDialog::new().save_file() {
-                if std::fs::write(&path, &buffer.content).is_ok() {
-                    buffer.path = Some(path.to_string_lossy().to_string());
-                    buffer.name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                }
+            if buffer.save() && buffer.name == "color.json" {
+                reload_needed = true;
+            }
+        }
+        if reload_needed { self.reload_theme(); }
+    }
+
+    pub fn close_buffer(&mut self, idx: usize) {
+        if let Some(buffer) = self.buffers.get(idx) {
+            if buffer.is_dirty {
+                self.close_confirm.ask(idx);
+            } else {
+                self.perform_close(idx);
             }
         }
     }
 
-    pub fn close_buffer(&mut self, idx: usize) {
+    pub fn perform_close(&mut self, idx: usize) {
         if idx < self.buffers.len() {
             self.buffers.remove(idx);
             if !self.buffers.is_empty() {
                 self.active_buffer_idx = self.active_buffer_idx.min(self.buffers.len() - 1);
             }
         }
+        self.close_confirm.close();
     }
 }
 
@@ -88,6 +89,7 @@ impl Default for EditorApp {
             bottom_tab: BottomTab::default(),
             top_bar_state: TopBarState::default(),
             project_path: None,
+            close_confirm: CloseConfirmation::default(),
         }
     }
 }

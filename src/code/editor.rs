@@ -1,7 +1,7 @@
 use eframe::egui;
 use crate::code::theme::EditorTheme;
 
-pub fn show(ui: &mut egui::Ui, text: &mut String, theme: &EditorTheme) {
+pub fn show(ui: &mut egui::Ui, text: &mut String, theme: &EditorTheme, is_dirty: &mut bool) {
     let mut layouter = |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, wrap_width: f32| {
         let string = buffer.as_str();
         let mut job = egui::text::LayoutJob::default();
@@ -34,6 +34,7 @@ pub fn show(ui: &mut egui::Ui, text: &mut String, theme: &EditorTheme) {
     };
 
     ui.horizontal_top(|ui| {
+        // Line numbers
         let line_count = text.lines().count().max(1);
         let mut line_nums = String::new();
         for i in 1..=line_count {
@@ -49,7 +50,8 @@ pub fn show(ui: &mut egui::Ui, text: &mut String, theme: &EditorTheme) {
         
         ui.add_space(10.0);
 
-        ui.add(
+        // Draw TextEdit and check for changes
+        let response = ui.add(
             egui::TextEdit::multiline(text)
                 .font(egui::TextStyle::Monospace)
                 .desired_width(f32::INFINITY)
@@ -57,5 +59,10 @@ pub fn show(ui: &mut egui::Ui, text: &mut String, theme: &EditorTheme) {
                 .layouter(&mut layouter)
                 .frame(false),
         );
+
+        // DIRECT TRIGGER: Update the flag if the text changed
+        if response.changed() {
+            *is_dirty = true;
+        }
     });
 }

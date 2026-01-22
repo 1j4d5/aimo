@@ -8,17 +8,25 @@ pub fn show_tab_bar(app: &mut EditorApp, ui: &mut egui::Ui) {
 
         for (i, buffer) in app.buffers.iter().enumerate() {
             let is_active = app.active_buffer_idx == i;
-            ui.group(|ui| {
-                let text = egui::RichText::new(&buffer.name)
-                    .color(if is_active { 
-                        app.theme.col(app.theme.keywords) 
-                    } else { 
-                        app.theme.col(app.theme.text) 
-                    });
+            
+            let name = if buffer.is_dirty {
+                format!("{}*", buffer.name)
+            } else {
+                buffer.name.clone()
+            };
 
-                if ui.selectable_label(is_active, text).clicked() {
+            ui.group(|ui| {
+                ui.style_mut().spacing.item_spacing.x = 2.0;
+                let color = if is_active { 
+                    app.theme.col(app.theme.keywords) 
+                } else { 
+                    app.theme.col(app.theme.text) 
+                };
+
+                if ui.selectable_label(is_active, egui::RichText::new(name).color(color)).clicked() {
                     app.active_buffer_idx = i;
                 }
+                
                 if ui.small_button("x").clicked() {
                     to_remove = Some(i);
                 }

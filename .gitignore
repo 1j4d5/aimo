@@ -1,2 +1,9 @@
 /target/debug
 /target/flycheck0
+/target/release/.fingerprint
+/target/release/deps
+/target/release/build
+/target/release/incremental
+/target/release/.cargo-lock
+**/examples/
+/target/release/aimo.pdb
